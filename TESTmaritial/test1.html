@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE STORY</title>
+    <style>
+        /* 基础样式：黑底白字，神秘感 */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            color: #ddd; /* 略带灰度的白，不刺眼 */
+            font-family: 'Courier New', Courier, 'Times New Roman', serif; /* 复古字体 */
+            overflow: hidden; /* 禁止滚动 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            user-select: none; /* 禁止选中文本 */
+        }
+
+        /* 容器样式 */
+        #story-container {
+            width: 80%;
+            max-width: 800px;
+            height: 60%;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        /* 文字样式 */
+        #text-display {
+            font-size: 24px;
+            line-height: 1.8;
+            min-height: 100px;
+            white-space: pre-wrap; /* 保留换行符 */
+            opacity: 0; /* 初始隐藏，用于翻页动画 */
+            transform: translateY(20px);
+            transition: opacity 0.8s ease, transform 0.8s ease;
+        }
+
+        /* 激活状态：显示文字 */
+        #text-display.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* 光标闪烁效果 */
+        .cursor {
+            display: inline-block;
+            width: 10px;
+            height: 24px;
+            background-color: #ddd;
+            margin-left: 5px;
+            animation: blink 1s infinite;
+            vertical-align: middle;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        /* 底部提示文字 */
+        #hint {
+            position: absolute;
+            bottom: 10%;
+            width: 100%;
+            text-align: center;
+            font-size: 14px;
+            color: #555;
+            opacity: 0;
+            transition: opacity 1s;
+        }
+        
+        #hint.show {
+            opacity: 1;
+        }
+
+        /* 页面计数器 (可选，增加神秘仪式的感觉) */
+        #page-counter {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 12px;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 页面角落的页码标记 -->
+    <div id="page-counter">I</div>
+
+    <div id="story-container">
+        <!-- 剧情文本区域 -->
+        <div id="text-display"></div>
+        
+        <!-- 点击继续的提示 -->
+        <div id="hint">（ 点击屏幕继续 ）</div>
+    </div>
+
+    <script>
+        // ================= 配置区域 =================
+        
+        // 在这里填写最后一页翻完后要跳转的网址
+        const TARGET_URL = "./test3.html"; 
+
+        // 在这里配置三页的剧情内容 (\n 代表换行)
+        const storyLines = [
+            "第一幕：\n\n岳阳楼下临洞庭湖，常年多雨、水汽浓重，\n导致楼体木构受潮腐朽，楼板松动，观景回廊也因湖水冲刷出现倾斜。",
+            
+            "第二幕：\n\n当地文人与匠人联名修缮，但多次修缮后，木构仍易受潮，无法长久保存。\n宋墨抵达后，发现岳阳楼的营造不仅要考虑“坚固耐用”，还要兼顾“观景视野”",
+            
+            "第三幕：\n\n范仲淹《岳阳楼记》中“衔远山，吞长江”\n而残卷中关于“临水建筑防潮”的记载，需结合岳阳楼的人文属性，才能完整还原。"
+        ];
+
+        // ================= 逻辑代码 =================
+
+        let currentPage = 0; // 当前页数
+        let charIndex = 0;   // 当前打字位置
+        let isTyping = false; // 是否正在打字
+        let currentText = ""; 
+        let typeInterval;
+        
+        const textDisplay = document.getElementById('text-display');
+        const hint = document.getElementById('hint');
+        const pageCounter = document.getElementById('page-counter');
+        const romanNumerals = ["I", "II", "III"];
+
+        // 初始化第一页
+        window.onload = () => {
+            loadPage(0);
+        };
+
+        // 全局点击事件
+        document.body.addEventListener('click', handleInteraction);
+        // 支持键盘空格或回车
+        document.body.addEventListener('keydown', (e) => {
+            if(e.code === 'Space' || e.code === 'Enter') handleInteraction();
+        });
+
+        function handleInteraction() {
+            if (currentPage >= storyLines.length) {
+                // 剧情结束，什么都不做或防止重复跳转
+                return; 
+            }
+
+            if (isTyping) {
+                // 如果正在打字，点击则瞬间显示全这页全部文字（跳过动画）
+                finishTypingImmediately();
+            } else {
+                // 如果打字完成，点击则翻到下一页
+                nextPage();
+            }
+        }
+
+        function loadPage(index) {
+            if (index >= storyLines.length) {
+                // 如果超过了页数，执行跳转
+                document.body.style.cursor = 'wait';
+                document.body.style.opacity = '0'; // 整个页面变黑
+                document.body.style.transition = 'opacity 1s';
+                
+                setTimeout(() => {
+                    window.location.href = TARGET_URL;
+                }, 1000);
+                return;
+            }
+
+            // 重置状态
+            currentPage = index;
+            charIndex = 0;
+            isTyping = true;
+            currentText = storyLines[index];
+            hint.classList.remove('show');
+            pageCounter.innerText = romanNumerals[index] || "";
+            
+            // 翻页动画：先隐藏，再显示
+            textDisplay.classList.remove('active');
+            
+            setTimeout(() => {
+                textDisplay.innerHTML = '<span class="cursor"></span>';
+                textDisplay.classList.add('active');
+                
+                // 开始打字
+                clearInterval(typeInterval);
+                typeInterval = setInterval(typeWriter, 100); // 100ms 打一个字，可调整速度
+            }, 600); // 等待淡出动画完成
+        }
+
+        function typeWriter() {
+            if (charIndex < currentText.length) {
+                // 获取当前要显示的文字
+                const currentContent = currentText.substring(0, charIndex + 1);
+                // 更新DOM，保留光标
+                textDisplay.innerHTML = currentContent + '<span class="cursor"></span>';
+                charIndex++;
+            } else {
+                // 打字完成
+                isTyping = false;
+                clearInterval(typeInterval);
+                hint.classList.add('show'); // 显示“点击继续”
+            }
+        }
+
+        function finishTypingImmediately() {
+            isTyping = false;
+            clearInterval(typeInterval);
+            textDisplay.innerHTML = currentText + '<span class="cursor"></span>';
+            charIndex = currentText.length;
+            hint.classList.add('show');
+        }
+
+        function nextPage() {
+            loadPage(currentPage + 1);
+        }
+
+    </script>
+</body>
+</html>

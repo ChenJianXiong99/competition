@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>岳阳楼 - 天工开物建筑智慧</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #f0e6d2; font-family: "SimSun", "宋体", serif; }
+        
+        /* UI 层 */
+        #loading {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: #5d4e3e; font-size: 24px; font-weight: bold; pointer-events: none; transition: opacity 0.5s; z-index: 10;
+        }
+        .ui-container {
+            position: absolute; bottom: 30px; left: 0; width: 100%; text-align: center; pointer-events: none; z-index: 5;
+        }
+        .title {
+            font-size: 42px; color: #3d3021; margin-bottom: 5px;
+            text-shadow: 0 0 15px rgba(255,255,255,0.8); font-weight: bold; letter-spacing: 5px;
+        }
+        .subtitle { font-size: 18px; color: #6d5e4e; background: rgba(240, 230, 210, 0.6); padding: 5px 15px; border-radius: 20px; display: inline-block;}
+
+        /* 右侧详情面板 */
+        #info-panel {
+            position: absolute; top: 0; right: -420px; /* 默认隐藏 */
+            width: 380px; height: 100%;
+            background: rgba(245, 240, 225, 0.96);
+            border-left: 3px solid #8b4513;
+            box-shadow: -10px 0 30px rgba(0,0,0,0.15);
+            transition: right 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+            padding: 50px 35px; box-sizing: border-box; overflow-y: auto; color: #3d3021; z-index: 20;
+        }
+        #info-panel.active { right: 0; }
+        .panel-close {
+            position: absolute; top: 20px; right: 25px; cursor: pointer;
+            font-size: 32px; color: #8b4513; transition: transform 0.3s;
+        }
+        .panel-close:hover { transform: rotate(90deg); }
+        .panel-header {
+            font-size: 30px; border-bottom: 2px solid #8b4513; padding-bottom: 15px;
+            margin-bottom: 25px; font-weight: bold; letter-spacing: 2px;
+        }
+        .panel-quote {
+            font-family: "KaiTi", "楷体", serif; font-size: 20px; color: #a0522d;
+            border-left: 4px solid #a0522d; padding-left: 15px; margin: 25px 0;
+            background: rgba(160, 82, 45, 0.08); padding: 15px; line-height: 1.4;
+        }
+        .panel-content { font-size: 17px; line-height: 1.8; text-align: justify; color: #4a4a4a; }
+        
+        /* 鼠标样式 */
+        body.hover-pointer { cursor: pointer; }
+    </style>
+    <!-- Import Map -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="loading">正在构筑千古名楼... 0%</div>
+    
+    <!-- 详情面板 -->
+    <div id="info-panel">
+        <div class="panel-close" onclick="closePanel()">×</div>
+        <div class="panel-header" id="panel-title">结构名称</div>
+        <div class="panel-quote" id="panel-quote"></div>
+        <div class="panel-content" id="panel-desc"></div>
+    </div>
+
+    <div id="canvas-container"></div>
+    <div class="ui-container">
+        <div class="title">岳阳楼</div>
+        <div class="subtitle">点击黄色光点 · 解密《天工开物》建筑智慧</div>
+    </div>
+
+    <script>
+        window.closePanel = function() {
+            document.getElementById('info-panel').classList.remove('active');
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { Water } from 'three/addons/objects/Water.js';
+
+        // ================= 配置区域 =================
+        const debugMode = true; // ★ 如果光点位置还不对，把这里改成 true，会出现坐标轴辅助线
+        
+        // 场景初始化
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf0e6d2); 
+        scene.fog = new THREE.FogExp2(0xf0e6d2, 0.008);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 10000);
+        camera.position.set(35, 20, 50); // 调整相机初始角度，看清全貌
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 0.9;
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        // 控制器
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.minDistance = 10;
+        controls.maxDistance = 150;
+        controls.maxPolarAngle = Math.PI / 2 - 0.02; // 防止进入水下
+
+        // 灯光
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xfff5e6, 1.8);
+        dirLight.position.set(50, 80, 50);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.set(2048, 2048);
+        scene.add(dirLight);
+
+        // 环境：水面
+        const waterGeometry = new THREE.PlaneGeometry(10000, 10000);
+        const water = new Water(waterGeometry, {
+            textureWidth: 512, textureHeight: 512,
+            waterNormals: new THREE.TextureLoader().load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/waternormals.jpg', t => t.wrapS = t.wrapT = THREE.RepeatWrapping),
+            sunDirection: new THREE.Vector3(),
+            sunColor: 0xffffff, waterColor: 0x8899a6, distortionScale: 3.7, fog: scene.fog !== undefined
+        });
+        water.rotation.x = -Math.PI / 2;
+        water.position.y = -0.5;
+        scene.add(water);
+
+        // 环境：远山
+        function createMountain(x, z, scale, height) {
+            const geometry = new THREE.ConeGeometry(scale, height, 4);
+            geometry.scale(1.5, 1, 0.5);
+            const material = new THREE.MeshBasicMaterial({ color: 0x5d4e3e, transparent: true, opacity: 0.4, fog: true });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(x, height/2 - 20, z);
+            mesh.rotation.y = Math.random() * Math.PI;
+            scene.add(mesh);
+        }
+        for(let i=0; i<12; i++) {
+            const angle = (i/12)*Math.PI*2;
+            const r = 300 + Math.random()*100;
+            createMountain(Math.cos(angle)*r, Math.sin(angle)*r, 80+Math.random()*60, 150+Math.random()*100);
+        }
+
+        // ================= 核心交互逻辑 =================
+
+        // 1. 制作高亮光点材质 (更小、更亮、中心白边缘黄)
+        const canvas = document.createElement('canvas');
+        canvas.width = 64; canvas.height = 64;
+        const ctx = canvas.getContext('2d');
+        // 绘制发光核心
+        const gradient = ctx.createRadialGradient(32, 32, 4, 32, 32, 30);
+        gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');   // 极亮核心
+        gradient.addColorStop(0.3, 'rgba(255, 220, 0, 1)');  // 黄色内圈
+        gradient.addColorStop(0.6, 'rgba(255, 180, 0, 0.4)'); // 橙色外晕
+        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');        // 透明边缘
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 64, 64);
+        
+        const hotspotTexture = new THREE.CanvasTexture(canvas);
+        const hotspotMaterial = new THREE.SpriteMaterial({ 
+            map: hotspotTexture, 
+            color: 0xffffff,
+            blending: THREE.AdditiveBlending, // ★ 关键：发光混合模式
+            depthTest: false, // ★ 关键：总是显示在最上层，不会被模型遮挡
+            transparent: true 
+        });
+
+        // 2. 热点数据 (根据图片估算坐标，基于高度=30的模型)
+        // Y轴参考：底部=0, 顶部=30
+        const hotspotData = [
+            {
+                // 柱基：在底部石头基座上
+                pos: new THREE.Vector3(0, 5, 11), 
+                title: "柱基抬高 · 避湿",
+                quote: "“临水筑屋，先避湿，后取景” ——《天工开物》",
+                desc: "岳阳楼基座并非直接立于土上，而是建立在巨大的岩石台基之上。这种将柱基大幅抬高于水面的设计（图示底部厚重的基座），结合糯米石灰浆灌缝，有效阻隔了洞庭湖丰水期的湿气和洪水侵蚀，是木楼千年不腐的第一道防线。"
+            },
+            {
+                // 木柱：第一层红柱位置
+                pos: new THREE.Vector3(5, 13, 1), 
+                title: "桐油饰木 · 防腐",
+                quote: "“凡木色心为上……桐油饰之”",
+                desc: "楼身纯木结构，无一颗铁钉。你所见的深红色柱体，皆经过桐油反复涂刷。桐油渗入木质纤维，在表面形成致密的“保护膜”，既防虫蛀白蚁，又抗风雨剥蚀。这种源自《天工开物》的植物油防腐技术，是古建筑延年益寿的秘诀。"
+            },
+            {
+                // 飞檐：第二层或第三层屋檐翘角
+                pos: new THREE.Vector3(-8, 21, -5), 
+                title: "盔顶飞檐 · 导水",
+                quote: "“檐牙高啄，各抱地势”",
+                desc: "岳阳楼如将军头盔般的屋顶，不仅美观，更具实用功能。极度上翘的飞檐（如光点所示处）能将雨水抛洒至远处，形成“大珠小珠落玉盘”的水帘，避免雨水顺着墙面流下腐蚀木柱根部。这就是“水不淋墙，墙不倒”的智慧。"
+            },
+            {
+                // 回廊：第一层或第二层的走廊栏杆
+                pos: new THREE.Vector3(0, 14, -8), 
+                title: "四面回廊 · 通风",
+                quote: "“气吞云梦……南极潇湘”",
+                desc: "楼层设置四面贯通的回廊，不仅是为了观景，更是为了形成“穿堂风”。流动的空气能迅速带走木结构表面的湿气，保持干燥。这种顺应地势气候的设计，实现了建筑与自然的呼吸共存。"
+            }
+        ];
+
+        const hotspotSprites = [];
+        const raycaster = new THREE.Raycaster();
+        const pointer = new THREE.Vector2();
+
+        // ================= 模型加载 =================
+        const loader = new GLTFLoader();
+        const modelGroup = new THREE.Group(); // 最终容器
+        scene.add(modelGroup);
+
+        // 如果开启调试模式，添加辅助线
+        if(debugMode) {
+            const axesHelper = new THREE.AxesHelper(30);
+            scene.add(axesHelper);
+            const gridHelper = new THREE.GridHelper(60, 60);
+            scene.add(gridHelper);
+        }
+
+        loader.load('../assets/frames1/models/yueYanglou.glb', function (gltf) {
+            const rawModel = gltf.scene;
+            
+            // 1. 计算原始尺寸
+            const box = new THREE.Box3().setFromObject(rawModel);
+            const size = box.getSize(new THREE.Vector3());
+            const center = box.getCenter(new THREE.Vector3());
+            
+            // 2. 统一缩放：强制设定高度为 30，方便定位热点
+            const targetHeight = 30;
+            const scaleFactor = targetHeight / size.y;
+            
+            rawModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
+            
+            // 3. 居中校正：将模型底部中心对齐到 (0,0,0)
+            // 这样 Y=0 就是底部，Y=30 就是顶部
+            rawModel.position.set(
+                -center.x * scaleFactor, 
+                -box.min.y * scaleFactor, 
+                -center.z * scaleFactor
+            );
+
+            modelGroup.add(rawModel);
+
+            // 4. 生成底座岛屿 (根据模型宽度)
+            const maxW = Math.max(size.x, size.z) * scaleFactor;
+            const islandGeo = new THREE.CylinderGeometry(maxW * 0.7, maxW * 0.9, 3, 32);
+            const islandMat = new THREE.MeshStandardMaterial({ color: 0x4a3c2a, roughness: 1 });
+            const island = new THREE.Mesh(islandGeo, islandMat);
+            island.position.y = -1.5; // 放在水面下一点
+            island.receiveShadow = true;
+            modelGroup.add(island);
+
+            // 5. 生成热点 (添加到 modelGroup 中，随模型一起动)
+            hotspotData.forEach(data => {
+                const sprite = new THREE.Sprite(hotspotMaterial);
+                sprite.position.copy(data.pos);
+                // 调整大小：因为使用了 AdditiveBlending，即使小一点也很亮
+                // 设置为 2.0 左右比较合适
+                sprite.scale.set(2.5, 2.5, 2.5); 
+                sprite.userData = data; // 绑定文字数据
+                sprite.userData.baseScale = 2.5; // 记录基础大小用于动画
+                sprite.userData.timeOffset = Math.random() * 100;
+                
+                modelGroup.add(sprite);
+                hotspotSprites.push(sprite);
+            });
+
+            // 阴影处理
+            rawModel.traverse(c => {
+                if(c.isMesh) { c.castShadow = true; c.receiveShadow = true; }
+            });
+
+            // 入场动画
+            modelGroup.position.y = -20;
+            let entryProgress = 0;
+            function entry() {
+                if(entryProgress < 1) {
+                    entryProgress += 0.015;
+                    const val = 1 - Math.pow(1 - entryProgress, 3); // EaseOut
+                    modelGroup.position.y = -20 + val * 20;
+                    requestAnimationFrame(entry);
+                }
+            }
+            entry();
+
+            document.getElementById('loading').style.opacity = 0;
+
+        }, undefined, function(e) { console.error(e); document.getElementById('loading').innerText = "模型加载失败"; });
+
+        // ================= 交互事件 =================
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('click', onClick);
+
+        function updatePointer(event) {
+            pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+            pointer.y = - (event.clientY / window.innerHeight) * 2 + 1;
+        }
+
+        function onPointerMove(event) {
+            updatePointer(event);
+            raycaster.setFromCamera(pointer, camera);
+            const intersects = raycaster.intersectObjects(hotspotSprites);
+            
+            if (intersects.length > 0) {
+                document.body.classList.add('hover-pointer');
+                // 悬停放大效果
+                intersects[0].object.scale.set(4, 4, 4); 
+            } else {
+                document.body.classList.remove('hover-pointer');
+                // 恢复大小（在animate中处理更平滑，这里为了简单直接重置）
+                hotspotSprites.forEach(s => s.scale.set(s.userData.baseScale, s.userData.baseScale, s.userData.baseScale));
+            }
+        }
+
+        function onClick(event) {
+            updatePointer(event);
+            raycaster.setFromCamera(pointer, camera);
+            const intersects = raycaster.intersectObjects(hotspotSprites);
+            if (intersects.length > 0) {
+                const data = intersects[0].object.userData;
+                showInfo(data);
+            } else {
+                // 点击空白处关闭
+                // document.getElementById('info-panel').classList.remove('active');
+            }
+        }
+
+        function showInfo(data) {
+            const panel = document.getElementById('info-panel');
+            document.getElementById('panel-title').innerText = data.title;
+            document.getElementById('panel-quote').innerText = data.quote;
+            document.getElementById('panel-desc').innerText = data.desc;
+            panel.classList.add('active');
+        }
+
+        // ================= 动画循环 =================
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = performance.now() / 1000;
+            
+            water.material.uniforms['time'].value += 1.0 / 60.0;
+            controls.update();
+
+            // 光点呼吸动画
+            hotspotSprites.forEach(sprite => {
+                // 如果鼠标没悬停，就执行呼吸动画
+                if(sprite.scale.x < 3.5) { 
+                    const scale = sprite.userData.baseScale + Math.sin(time * 3 + sprite.userData.timeOffset) * 0.3;
+                    sprite.scale.set(scale, scale, scale);
+                }
+            });
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+    </script>
+</body>
+</html>

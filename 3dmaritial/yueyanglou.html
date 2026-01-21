@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>岳阳楼 - 水墨山水3D场景</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #f0e6d2; /* 宣纸底色 */
+            font-family: "SimSun", "宋体", serif;
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #5d4e3e;
+            font-size: 24px;
+            pointer-events: none;
+            transition: opacity 0.5s;
+        }
+        .ui-container {
+            position: absolute;
+            bottom: 30px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            pointer-events: none;
+        }
+        .title {
+            font-size: 36px;
+            color: #3d3021;
+            margin-bottom: 10px;
+            text-shadow: 0 0 10px rgba(255,255,255,0.5);
+            font-weight: bold;
+        }
+        .subtitle {
+            font-size: 18px;
+            color: #6d5e4e;
+        }
+        #canvas-container {
+            width: 100%;
+            height: 100vh;
+        }
+    </style>
+    <!-- Import Map for Three.js -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="loading">正在构建山水意境... 0%</div>
+    <div id="canvas-container"></div>
+    <div class="ui-container">
+        <div class="title">岳阳楼</div>
+        <div class="subtitle">拖动旋转 · 滚轮缩放 · 沉浸山水</div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { Water } from 'three/addons/objects/Water.js';
+        import { Sky } from 'three/addons/objects/Sky.js';
+
+        // 场景配置
+        const scene = new THREE.Scene();
+        // 设置水墨风格背景雾气
+        scene.background = new THREE.Color(0xf0e6d2); 
+        scene.fog = new THREE.FogExp2(0xf0e6d2, 0.008);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 10000);
+        camera.position.set(30, 15, 60);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        // 启用阴影
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        // 色调映射，增加古朴感
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 0.85;
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        // 控制器
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxPolarAngle = Math.PI / 2 - 0.05; // 限制不能钻到地下
+        controls.minDistance = 10;
+        controls.maxDistance = 200;
+        controls.target.set(0, 5, 0);
+
+        // 灯光系统
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xfff0dd, 1.5);
+        dirLight.position.set(50, 80, 30);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.near = 0.1;
+        dirLight.shadow.camera.far = 200;
+        dirLight.shadow.bias = -0.0001;
+        // 扩大阴影范围
+        const d = 100;
+        dirLight.shadow.camera.left = -d;
+        dirLight.shadow.camera.right = d;
+        dirLight.shadow.camera.top = d;
+        dirLight.shadow.camera.bottom = -d;
+        scene.add(dirLight);
+
+        // --- 环境构建 ---
+
+        // 1. 水面 (使用 Three.js Water shader)
+        const waterGeometry = new THREE.PlaneGeometry(10000, 10000);
+        const water = new Water(
+            waterGeometry,
+            {
+                textureWidth: 512,
+                textureHeight: 512,
+                waterNormals: new THREE.TextureLoader().load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/waternormals.jpg', function ( texture ) {
+                    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+                }),
+                sunDirection: new THREE.Vector3(),
+                sunColor: 0xffffff,
+                waterColor: 0x8899a6, // 淡墨色水面
+                distortionScale: 3.7,
+                fog: scene.fog !== undefined
+            }
+        );
+        water.rotation.x = - Math.PI / 2;
+        // 水面稍微下沉一点，避免z-fighting如果模型底座在0点
+        water.position.y = -0.5; 
+        scene.add(water);
+
+        // 2. 远山 (用简单的几何体模拟水墨山峦剪影)
+        function createMountain(x, z, scale, height, opacity) {
+            const geometry = new THREE.ConeGeometry(scale, height, 4);
+            // 扁平化处理，像远处的山峰
+            geometry.scale(1.5, 1, 0.5); 
+            const material = new THREE.MeshBasicMaterial({
+                color: 0x5d4e3e, // 深墨色
+                transparent: true,
+                opacity: opacity,
+                fog: true
+            });
+            const mountain = new THREE.Mesh(geometry, material);
+            mountain.position.set(x, height/2 - 20, z);
+            mountain.rotation.y = Math.random() * Math.PI;
+            scene.add(mountain);
+        }
+
+        // 生成一圈背景远山
+        for(let i=0; i<15; i++) {
+            const angle = (i / 15) * Math.PI * 2;
+            const radius = 300 + Math.random() * 100;
+            const x = Math.cos(angle) * radius;
+            const z = Math.sin(angle) * radius;
+            const scale = 80 + Math.random() * 60;
+            const height = 150 + Math.random() * 100;
+            const opacity = 0.3 + Math.random() * 0.4;
+            createMountain(x, z, scale, height, opacity);
+        }
+        
+        // 3. 底部托盘/岛屿 (放置建筑的地面) - 先创建空的，后面根据模型调整大小
+        let island;
+        const islandGroup = new THREE.Group();
+        scene.add(islandGroup);
+        
+        function createIsland(radius) {
+            // 清除旧的
+            while(islandGroup.children.length > 0){ 
+                islandGroup.remove(islandGroup.children[0]); 
+            }
+            
+            // 顶部更扁平，更自然
+            const geometry = new THREE.CylinderGeometry(radius * 0.8, radius * 1.1, 2, 64);
+            const material = new THREE.MeshStandardMaterial({ 
+                color: 0x5d4e3e, // 更深的石头颜色
+                roughness: 1.0,
+            });
+            island = new THREE.Mesh(geometry, material);
+            island.position.y = -1.5; // 刚好在水面下一点点
+            island.receiveShadow = true;
+            islandGroup.add(island);
+        }
+
+        // --- 加载模型 ---
+        const loader = new GLTFLoader();
+        const modelPath = '../assets/frames1/models/yueYanglou.glb';
+
+        loader.load(modelPath, function (gltf) {
+            const model = gltf.scene;
+            
+            // 1. 先添加到场景计算正确的包围盒
+            scene.add(model);
+            
+            // 2. 计算原始包围盒
+            const box = new THREE.Box3().setFromObject(model);
+            const size = box.getSize(new THREE.Vector3());
+            const center = box.getCenter(new THREE.Vector3());
+
+            // 3. 假设我们希望模型高度大约为 30
+            const targetHeight = 30;
+            const scale = targetHeight / size.y;
+            
+            // 4. 应用缩放和中心校正
+            // 先将模型移回原点（基于底部中心）
+            // 注意：我们需要模型底部中心在 (0,0,0)
+            model.position.x += (model.position.x - center.x);
+            model.position.y += (model.position.y - box.min.y);
+            model.position.z += (model.position.z - center.z);
+            
+            // 这里的逻辑稍微复杂，更简单的方法是将模型放入一个 Group
+            scene.remove(model);
+            const container = new THREE.Group();
+            container.add(model);
+            
+            // 调整模型在 Group 内部的位置，使其底部中心位于 Group 原点
+            model.position.set(-center.x, -box.min.y, -center.z);
+            
+            // 对 Group 应用缩放
+            container.scale.set(scale, scale, scale);
+            
+            scene.add(container);
+
+            // 5. 根据模型宽度创建合适的岛屿
+            const maxDimension = Math.max(size.x, size.z);
+            createIsland(maxDimension * scale * 0.8); // 稍微比模型大一点
+
+            container.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                    if(child.material.map) {
+                        child.material.map.anisotropy = 16;
+                    }
+                }
+            });
+            
+            document.getElementById('loading').style.opacity = 0;
+            
+            // 简单的入场动画
+            const startY = container.position.y;
+            container.position.y -= 20;
+            let progress = 0;
+            
+            function entryAnimation() {
+                if(progress < 1) {
+                    progress += 0.02;
+                    container.position.y = THREE.MathUtils.lerp(startY - 20, startY, easeOutCubic(progress));
+                    requestAnimationFrame(entryAnimation);
+                }
+            }
+            entryAnimation();
+
+        }, function (xhr) {
+            const percent = (xhr.loaded / xhr.total * 100).toFixed(0);
+            document.getElementById('loading').innerText = `正在构建山水意境... ${percent}%`;
+        }, function (error) {
+            console.error(error);
+            document.getElementById('loading').innerText = '模型加载失败，请检查路径';
+        });
+
+        function easeOutCubic(x) {
+            return 1 - Math.pow(1 - x, 3);
+        }
+
+        // --- 动画循环 ---
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // 水面流动动画
+            water.material.uniforms[ 'time' ].value += 1.0 / 60.0;
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // --- 窗口适配 ---
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    </script>
+</body>
+</html>
