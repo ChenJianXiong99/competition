@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>快速丝滑滚动逐帧效果</title>
+  <style>
+    .btn-container {
+      padding: 20px;
+      /* 可选：给容器加轻微复古纹理背景，强化氛围 */
+      min-height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* 核心按钮样式 */
+    #startBtn {
+      /* 基础布局 */
+      padding: 16px 48px;
+      font-size: 18px;
+      font-weight: 600;
+      color: #f5e8d0; /* 仿古宣纸色文字 */
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      /* 毛玻璃核心属性 */
+      background: rgba(50, 38, 22, 0.4); /* 仿古木色半透明底 */
+      backdrop-filter: blur(8px); /* 毛玻璃模糊效果 */
+      -webkit-backdrop-filter: blur(8px); /* 兼容webkit内核 */
+      /* 古典苍老质感：边框+纹理 */
+      border: 1px solid rgba(180, 140, 80, 0.6); /* 做旧铜色边框 */
+      box-shadow: 
+        0 4px 12px rgba(0, 0, 0, 0.3), /* 外阴影增强立体感 */
+        inset 0 1px 0 rgba(255, 245, 230, 0.2), /* 内高光模拟磨损 */
+        inset 0 -1px 0 rgba(0, 0, 0, 0.4); /* 内阴影模拟凹陷 */
+      /* 文字抗锯齿 */
+      -webkit-font-smoothing: antialiased;
+      font-family: "SimSun", "宋体", serif; /* 宋体强化古典感 */
+      transition: all 0.3s ease;
+    }
+
+    /* 按钮伪元素：模拟仿古纹理/划痕 */
+    #startBtn::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      /* 做旧纹理：轻微噪点+渐变 */
+      background: 
+        repeating-linear-gradient(
+          45deg,
+          rgba(120, 90, 50, 0.1) 0px,
+          rgba(120, 90, 50, 0.1) 2px,
+          transparent 2px,
+          transparent 8px
+        ),
+        linear-gradient(to bottom, rgba(50, 38, 22, 0.2), rgba(50, 38, 22, 0.5));
+      pointer-events: none; /* 不影响点击 */
+      opacity: 0.7;
+    }
+
+    /* hover效果：毛玻璃更通透+光影强化 */
+    #startBtn:hover {
+      background: rgba(60, 45, 28, 0.6);
+      transform: translateY(-2px);
+      box-shadow: 
+        0 6px 16px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 245, 230, 0.3),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.5);
+      /* 炫丽感：添加轻微光效 */
+      text-shadow: 0 0 8px rgba(245, 230, 200, 0.8);
+    }
+
+    /* 点击效果：按压感+弱化光效 */
+    #startBtn:active {
+      transform: translateY(0);
+      box-shadow: 
+        0 2px 8px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(0, 0, 0, 0.4),
+        inset 0 -1px 0 rgba(255, 245, 230, 0.1);
+    }
+
+    /* 兼容：无backdrop-filter的浏览器降级 */
+    @supports not (backdrop-filter: blur(8px)) {
+      #startBtn {
+        background: rgba(50, 38, 22, 0.8); /* 不透明一点 */
+      }
+    }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    .frame-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background-repeat: no-repeat;
+      background-position: center;
+      background-size: cover;
+      z-index: -1;
+      /* 取消过渡，让帧切换更即时 */
+      transition: none;
+    }
+    .page-content {
+      /* 缩短滚动高度 → 相同滚动距离切换更多帧（核心提速） */
+      height: 1000vh; 
+      color: white;
+      font-size: 2rem;
+      text-shadow: 0 0 10px #000;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-around;
+      align-items: center;
+    }
+    
+    .lock-scroll {
+      overflow: hidden !important;
+      height: 100vh !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="frame-container" id="frameContainer"></div>
+  <div class="page-content">
+    <div></div>
+    <div class="btn-container">
+    <a href="./tianGongKaiWu/index.html"><div><input type="button" value="点击开始探索“天工”建筑" id="startBtn"></div></a>
+  </div>
+    <div></div>
+    <div></div>
+  </div>
+
+  <script>
+    // 核心配置（适配315帧 + 0.016秒间隔）
+    const config = {
+      framePath: 'assets/frames1/video_frames/', // 图片路径
+      frameCount: 315,                           // 总帧数：315张
+      step: 0.016,                               // 帧间隔：0.016秒
+      suffix: 's.png',                           // 图片后缀
+      speedRatio: 1.5,                           // 滚动速度比例
+      preload: true                              // 预加载图片
+    };
+
+    const frameContainer = document.getElementById('frameContainer');
+    const body = document.body;
+    let frameImages = [];       // 预加载的图片数组
+    let lastFrameIndex = -1;    // 上一帧索引
+    let isLastFrameActive = false; // 最后一帧激活标记
+    let lockScrollPosition = 0;  // 锁定时的滚动位置（解锁后恢复）
+
+    // ========== 核心修复：精准生成图片名称（避免浮点误差） ==========
+    function getFrameSrc(frameIndex) {
+      // 方式1：直接按帧索引计算秒数（四舍五入到2位小数，匹配实际文件命名）
+      const second = (frameIndex * config.step).toFixed(2);
+      // 方式2：如果文件是按整数计数命名（比如frame_1.png），用下面这行：
+      // const frameNum = frameIndex + 1; // 若文件是frame_1.png ~ frame_315.png
+      // return `${config.framePath}frame_${frameNum}.png`;
+      
+      // 生成格式：frame_0.00s.png / frame_0.016s.png → 四舍五入为frame_0.02s.png
+      return `${config.framePath}frame_${second}${config.suffix}`;
+    }
+
+    // ========== 预加载图片（分批加载，避免卡顿） ==========
+    function preloadFrames() {
+      if (!config.preload) return;
+      console.log('开始预加载315帧图片...');
+      
+      // 分批预加载：每批50张，降低内存占用
+      const batchSize = 50;
+      let currentBatch = 0;
+
+      function loadBatch(batchIndex) {
+        const start = batchIndex * batchSize;
+        const end = Math.min(start + batchSize - 1, config.frameCount - 1);
+        
+        for (let i = start; i <= end; i++) {
+          const src = getFrameSrc(i);
+          const img = new Image();
+          img.src = src;
+          
+          img.onload = () => {
+            frameImages[i] = img;
+            // 加载第一帧时显示
+            if (i === 0) {
+              frameContainer.style.backgroundImage = `url(${src})`;
+            }
+          };
+          
+          img.onerror = () => {
+            console.error(`图片加载失败：${src}，请检查路径和命名`);
+          };
+        }
+
+        // 加载下一批
+        currentBatch++;
+        if (currentBatch * batchSize < config.frameCount) {
+          setTimeout(() => loadBatch(currentBatch), 200);
+        } else {
+          console.log('315帧图片预加载完成');
+        }
+      }
+
+      // 启动第一批加载
+      loadBatch(0);
+    }
+
+    // ========== 更新帧 + 滚动锁定逻辑 ==========
+    function updateFrame() {
+      // 计算当前滚动比例
+      const scrollTop = window.scrollY * config.speedRatio;
+      const maxScroll = document.body.scrollHeight / 2; // 滚动范围适配
+      const scrollRatio = Math.max(0, Math.min(1, scrollTop / maxScroll));
+      
+      // 计算当前帧索引（向下取整，确保0 ~ 314）
+      const currentFrameIndex = Math.floor(scrollRatio * (config.frameCount - 1));
+
+      // 1. 最后一帧激活逻辑（315帧的最后一帧索引是314）
+      if (currentFrameIndex >= config.frameCount - 1 && !isLastFrameActive) {
+        isLastFrameActive = true;
+        lockScrollPosition = window.scrollY; // 记录锁定时的滚动位置
+        body.classList.add('lock-scroll');   // 禁用所有滚动
+        console.log('最后一帧（第315帧）已激活，锁定所有滚动');
+      }
+      // 2. 离开最后一帧解锁逻辑
+      else if (currentFrameIndex < config.frameCount - 1 && isLastFrameActive) {
+        isLastFrameActive = false;
+        body.classList.remove('lock-scroll');// 解锁滚动
+        // 恢复解锁时的滚动位置
+        window.scrollTo(0, lockScrollPosition);
+        console.log('离开最后一帧，解锁所有滚动');
+      }
+
+      // 3. 切换帧（仅帧索引变化时更新）
+      if (currentFrameIndex !== lastFrameIndex) {
+        lastFrameIndex = currentFrameIndex;
+        const src = getFrameSrc(currentFrameIndex);
+        // 优先使用预加载的图片，否则直接加载
+        frameContainer.style.backgroundImage = frameImages[currentFrameIndex]
+          ? `url(${frameImages[currentFrameIndex].src})`
+          : `url(${src})`;
+      }
+
+      // 持续更新帧
+      requestAnimationFrame(updateFrame);
+    }
+
+    // ========== 全场景拦截滚动（捕获阶段） ==========
+    function blockAllScroll(e) {
+      if (!isLastFrameActive) return;
+
+      // 拦截所有向下滚动行为
+      const isScrollDown = 
+        // 滚轮向下
+        (e.type === 'wheel' && (e.deltaY > 0 || e.wheelDelta < 0)) ||
+        // 触摸向下（移动端）
+        (e.type === 'touchmove' && (touchStartY - e.touches[0].clientY) > 0) ||
+        // 键盘向下按键
+        (e.type === 'keydown' && ['ArrowDown', 'PageDown', ' ', 'End'].includes(e.key)) ||
+        // 鼠标拖动滚动条
+        (e.type === 'mousedown' && e.target.tagName === 'HTML');
+
+      if (isScrollDown) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+    }
+
+    // ========== 绑定所有滚动监听事件 ==========
+    // 1. 滚轮事件（捕获阶段）
+    window.addEventListener('wheel', blockAllScroll, { capture: true, passive: false });
+    // 2. 移动端触摸事件
+    let touchStartY = 0;
+    window.addEventListener('touchstart', (e) => {
+      touchStartY = e.touches[0].clientY;
+    }, { capture: true, passive: true });
+    window.addEventListener('touchmove', blockAllScroll, { capture: true, passive: false });
+    // 3. 键盘事件
+    window.addEventListener('keydown', blockAllScroll, { capture: true, passive: false });
+    // 4. 鼠标拖动滚动条
+    window.addEventListener('mousedown', blockAllScroll, { capture: true, passive: false });
+
+    // ========== 初始化 ==========
+    // 强制重置滚动位置（禁用浏览器默认的滚动恢复）
+    if ('scrollRestoration' in history) {
+      history.scrollRestoration = 'manual';
+    }
+    window.scrollTo(0, 0);
+    
+    preloadFrames();          // 预加载图片
+    requestAnimationFrame(updateFrame); // 启动帧更新
+
+    // 窗口大小变化时重置帧
+    window.addEventListener('resize', () => {
+      lastFrameIndex = -1;
+      requestAnimationFrame(updateFrame);
+    });
+
+    // 滚轮加速（仅未锁定时生效）
+    let scrollSpeed = 0.5;
+    window.addEventListener('wheel', (e) => {
+      if (!isLastFrameActive) {
+        window.scrollBy({
+          top: e.deltaY * scrollSpeed,
+          behavior: 'auto'
+        });
+      }
+    }, { passive: true });
+  </script>
+</body>
+</html>
